@@ -1,0 +1,24 @@
+name: taskit
+description: "App to easily create tasks or events from any selected text in other apps."
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  add_2_calendar: ^3.0.0  # For adding events to Google Calendar
+  google_sign_in: ^6.2.1  # For Google authentication (if Google Tasks is enabled)
+  googleapis: ^13.2.0     # For Google Tasks API (if enabled)
+  intl: ^0.19.0           # For date formatting
+  permission_handler: ^11.3.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
