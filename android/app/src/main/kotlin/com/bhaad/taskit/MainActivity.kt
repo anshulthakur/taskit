@@ -1,4 +1,4 @@
-package com.example.taskit
+package me.bhaad.taskit
 
 import android.content.Intent
 import android.os.Bundle
