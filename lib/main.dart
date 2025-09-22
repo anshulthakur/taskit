@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/calendar/v3.dart' as calendar;
-import 'package:googleapis_auth/googleapis_auth.dart'; // Updated import
+import 'package:googleapis_auth/googleapis_auth.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -50,20 +50,42 @@ class GoogleCalendarProvider implements IntegrationProvider {
 
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: ['https://www.googleapis.com/auth/calendar.events'],
+    clientId: null, // Not needed for Android with correct SHA-1
   );
 
   Future<calendar.CalendarApi?> _getCalendarApi() async {
     try {
-      // Attempt silent sign-in, fall back to interactive
-      final account = await _googleSignIn.signInSilently() ?? await _googleSignIn.signIn();
+      // Try silent sign-in first
+      var account = await _googleSignIn.signInSilently();
+      if (account == null) {
+        if (kDebugMode) {
+          print('Silent sign-in failed, attempting interactive sign-in');
+        }
+        account = await _googleSignIn.signIn();
+      }
       if (account == null) {
         if (kDebugMode) {
           print('Google Sign-In failed: No account selected');
         }
         return null;
       }
+      if (kDebugMode) {
+        print('Google Sign-In succeeded: Account=${account.email}');
+      }
 
-      // Get auth headers (includes access token)
+      // Request Calendar API scope
+      final granted = await _googleSignIn.requestScopes(['https://www.googleapis.com/auth/calendar.events']);
+      if (!granted) {
+        if (kDebugMode) {
+          print('Google Sign-In failed: Calendar scope not granted');
+        }
+        return null;
+      }
+      if (kDebugMode) {
+        print('Calendar scope granted successfully');
+      }
+
+      // Get auth headers
       final headers = await account.authHeaders;
       final accessToken = headers['Authorization']?.replaceFirst('Bearer ', '');
       if (accessToken == null) {
@@ -72,18 +94,33 @@ class GoogleCalendarProvider implements IntegrationProvider {
         }
         return null;
       }
+      if (kDebugMode) {
+        print('Access token obtained successfully');
+      }
 
       // Create authenticated client
       final credentials = AccessCredentials(
-        AccessToken('Bearer', accessToken, DateTime.now().add(const Duration(hours: 1))),
-        null, // Refresh token (not needed for short-lived access)
+        AccessToken(
+          'Bearer',
+          accessToken,
+          DateTime.now().toUtc().add(const Duration(hours: 1)), // Use UTC
+        ),
+        null, // Refresh token not needed
         ['https://www.googleapis.com/auth/calendar.events'],
       );
       final client = authenticatedClient(http.Client(), credentials);
+      if (kDebugMode) {
+        print('Authenticated client created successfully');
+      }
       return calendar.CalendarApi(client);
     } catch (e) {
       if (kDebugMode) {
         print('Google Sign-In error: $e');
+      }
+      if (e.toString().contains('ApiException: 10')) {
+        throw Exception('Google Sign-In configuration error. Check SHA-1 and package name in Google Cloud Console.');
+      } else if (e.toString().contains('expiry')) {
+        throw Exception('Invalid DateTime format for access token expiry. Contact developer.');
       }
       return null;
     }
@@ -91,17 +128,27 @@ class GoogleCalendarProvider implements IntegrationProvider {
 
   @override
   Future<void> createTask(String title, DateTime? dueDate, String? description) async {
+    if (kDebugMode) {
+      print('Starting createTask: title=$title, dueDate=$dueDate, description=$description');
+    }
+
     // Request calendar permissions for intent-based approach
     final status = await Permission.calendarWriteOnly.request();
     if (!status.isGranted) {
+      if (kDebugMode) {
+        print('Calendar write permission denied');
+      }
       throw Exception('Calendar write permission denied. Please enable in settings.');
+    }
+    if (kDebugMode) {
+      print('Calendar write permission granted');
     }
 
     final event = calendar.Event(
       summary: title.isNotEmpty ? title : 'TaskIt Event',
       description: description ?? 'Created by TaskIt',
-      start: calendar.EventDateTime(dateTime: dueDate ?? DateTime.now()),
-      end: calendar.EventDateTime(dateTime: (dueDate ?? DateTime.now()).add(const Duration(hours: 1))),
+      start: calendar.EventDateTime(dateTime: dueDate?.toUtc() ?? DateTime.now().toUtc()),
+      end: calendar.EventDateTime(dateTime: (dueDate?.toUtc() ?? DateTime.now().toUtc()).add(const Duration(hours: 1))),
     );
 
     if (kDebugMode) {
@@ -122,7 +169,7 @@ class GoogleCalendarProvider implements IntegrationProvider {
         if (kDebugMode) {
           print('Calendar API error: $e');
         }
-        // Fall through to intent-based approach
+        throw Exception('Failed to create event via API: $e');
       }
     } else {
       if (kDebugMode) {
@@ -143,6 +190,9 @@ class GoogleCalendarProvider implements IntegrationProvider {
         print('addEvent2Cal result: $success');
       }
       if (success) {
+        if (kDebugMode) {
+          print('Event added successfully via add_2_calendar');
+        }
         return; // Success with add_2_calendar
       }
       if (kDebugMode) {
