@@ -32,7 +32,6 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        // Handle text selection
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, PROCESS_TEXT_CHANNEL)
             .setMethodCallHandler { call, result ->
                 if (call.method == "getSharedText") {
@@ -42,7 +41,6 @@ class MainActivity : FlutterActivity() {
                     result.notImplemented()
                 }
             }
-        // Handle calendar event insertion
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CALENDAR_CHANNEL)
             .setMethodCallHandler { call, result ->
                 if (call.method == "addCalendarEvent") {
@@ -56,8 +54,7 @@ class MainActivity : FlutterActivity() {
                         putExtra(CalendarContract.Events.DESCRIPTION, description)
                         putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, startTime)
                         putExtra(CalendarContract.EXTRA_EVENT_END_TIME, endTime)
-                        // Optionally target Google Calendar specifically
-                        //setPackage("com.google.android.calendar")
+                        setPackage("com.google.android.calendar")
                     }
                     try {
                         startActivity(intent)

@@ -8,6 +8,8 @@ import 'package:googleapis_auth/googleapis_auth.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:receive_sharing_intent/receive_sharing_intent.dart';  // For share intents
+import 'dart:async';  // For StreamSubscription
 
 void main() {
   runApp(const TaskitApp());
@@ -235,10 +237,63 @@ class _HomeScreenState extends State<HomeScreen> {
     // Add more providers here
   ];
 
+  late StreamSubscription _intentDataStreamSubscription;
+
   @override
   void initState() {
     super.initState();
     _loadSharedText();
+    // Listen for share intents (e.g., from WhatsApp)
+    _intentDataStreamSubscription = ReceiveSharingIntent.instance.getMediaStream().listen((List<SharedMediaFile> value) {
+      for (var file in value) {
+        if (file.type == SharedMediaType.text) {
+          final sharedText = file.path;  // Text content is in 'path' for SharedMediaType.text
+          if (sharedText.isNotEmpty) {
+            if (kDebugMode) {
+              print('Shared text received: $sharedText');
+            }
+            setState(() {
+              _selectedText = sharedText;
+              _title = sharedText;
+              _description = sharedText;
+            });
+            break;
+          }
+        }
+      }
+    }, onError: (err) {
+      if (kDebugMode) {
+        print('getMediaStream error: $err');
+      }
+    });
+
+    // Handle share intents when app is closed
+    ReceiveSharingIntent.instance.getInitialMedia().then((List<SharedMediaFile> value) {
+      for (var file in value) {
+        if (file.type == SharedMediaType.text) {
+          final sharedText = file.path;  // Text content is in 'path' for SharedMediaType.text
+          if (sharedText.isNotEmpty) {
+            if (kDebugMode) {
+              print('Initial shared text: $sharedText');
+            }
+            setState(() {
+              _selectedText = sharedText;
+              _title = sharedText;
+              _description = sharedText;
+            });
+            break;
+          }
+        }
+      }
+      // Tell the library we are done processing the initial intent
+      ReceiveSharingIntent.instance.reset();
+    });
+  }
+
+  @override
+  void dispose() {
+    _intentDataStreamSubscription.cancel();
+    super.dispose();
   }
 
   Future<void> _loadSharedText() async {
@@ -311,7 +366,7 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             if (_selectedText.isNotEmpty)
               Text(
-                'Selected Text: $_selectedText',
+                'Selected/Shared Text: $_selectedText',
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             const SizedBox(height: 16),

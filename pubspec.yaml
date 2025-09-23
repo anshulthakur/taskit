@@ -15,6 +15,7 @@ dependencies:
   googleapis_auth: ^1.6.0
   intl: ^0.19.0
   permission_handler: ^11.3.1
+  receive_sharing_intent: ^1.8.1  # Corrected to latest version
 
 dev_dependencies:
   flutter_test:
