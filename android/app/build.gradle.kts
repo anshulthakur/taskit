@@ -1,7 +1,6 @@
 plugins {
     id("com.android.application")
     id("kotlin-android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
@@ -20,10 +19,7 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "me.bhaad.taskit"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -40,18 +36,41 @@ android {
     }
 
     buildTypes {
-        release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+        getByName("release") {
+            isShrinkResources = true
+            isMinifyEnabled = true // ← must be true if shrinkResources is true
             signingConfig = signingConfigs.getByName("release")
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
-        debug {
+
+        getByName("debug") {
             signingConfig = signingConfigs.getByName("debug")
+            applicationIdSuffix = ".debug"
+            isDebuggable = true
         }
-        
     }
+
+    // Customize APK output file names
+    android.applicationVariants.all {
+        outputs.forEach { output ->
+            val buildTypeName = buildType.name
+            val apkName = if (buildTypeName == "debug") {
+                "taskit-debug.apk"
+            } else {
+                "taskit-release.apk"
+            }
+
+            // Cast to InternalArtifactType to access outputFileName
+            (output as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName = apkName
+        }
+    }
+
 }
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:1.9.22")
 }
