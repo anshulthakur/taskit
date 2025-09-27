@@ -8,6 +8,8 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import android.content.pm.PackageManager
 import android.util.Log
+import android.widget.Toast
+
 
 class MainActivity : FlutterActivity() {
     private var sharedText: String? = null
@@ -31,12 +33,15 @@ class MainActivity : FlutterActivity() {
         if (Intent.ACTION_PROCESS_TEXT == action && type == "text/plain") {
             sharedText = intent.getStringExtra(Intent.EXTRA_PROCESS_TEXT)
             Log.d(TAG, "Received shared text: $sharedText")
+            redirectToCalendar(sharedText ?: "")
+            // ✅ Exit TaskIt after launching calendar
+            finish()
         }
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        // Handle shared text channel
+
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, PROCESS_TEXT_CHANNEL)
             .setMethodCallHandler { call, result ->
                 if (call.method == "getSharedText") {
@@ -48,7 +53,7 @@ class MainActivity : FlutterActivity() {
                     result.notImplemented()
                 }
             }
-        // Handle calendar-related methods
+
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CALENDAR_CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -68,36 +73,8 @@ class MainActivity : FlutterActivity() {
                         val description = call.argument<String>("description")
                         val startTime = call.argument<Long>("startTime")
                         val endTime = call.argument<Long>("endTime")
-                        val intent = Intent(Intent.ACTION_INSERT).apply {
-                            data = CalendarContract.Events.CONTENT_URI
-                            putExtra(CalendarContract.Events.TITLE, title)
-                            putExtra(CalendarContract.Events.DESCRIPTION, description)
-                            putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, startTime)
-                            putExtra(CalendarContract.EXTRA_EVENT_END_TIME, endTime)
-                            // Target Google Calendar if installed
-                            try {
-                                packageManager.getPackageInfo("com.google.android.calendar", 0)
-                                setPackage("com.google.android.calendar")
-                                Log.d(TAG, "Targeting Google Calendar intent for title: $title")
-                            } catch (e: PackageManager.NameNotFoundException) {
-                                Log.d(TAG, "Google Calendar not installed, using generic intent")
-                            }
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                        try {
-                            val resolvedInfo = intent.resolveActivityInfo(packageManager, 0)
-                            if (resolvedInfo != null) {
-                                startActivity(intent)
-                                Log.d(TAG, "Successfully launched calendar intent for title: $title, resolved to ${resolvedInfo.packageName}/${resolvedInfo.name}")
-                                result.success(true)
-                            } else {
-                                Log.d(TAG, "No activity available to handle calendar intent for title: $title")
-                                result.success(false)
-                            }
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Failed to add event via calendar intent: ${e.message}")
-                            result.success(false)
-                        }
+                        redirectToCalendar(title ?: "", description, startTime, endTime)
+                        result.success(true)
                     }
                     else -> {
                         Log.d(TAG, "Method not implemented: ${call.method}")
@@ -105,5 +82,47 @@ class MainActivity : FlutterActivity() {
                     }
                 }
             }
+    }
+
+    private fun redirectToCalendar(
+        title: String,
+        description: String? = null,
+        startTime: Long? = null,
+        endTime: Long? = null
+    ) {
+        val prefs = getSharedPreferences("TaskItPrefs", MODE_PRIVATE)
+        val preferredApp = prefs.getString("preferred_app", "com.google.android.calendar")
+        val intent = Intent(Intent.ACTION_INSERT).apply {
+            data = CalendarContract.Events.CONTENT_URI
+            putExtra(CalendarContract.Events.TITLE, title.ifEmpty { "TaskIt Task" })
+            putExtra(CalendarContract.Events.DESCRIPTION, description ?: "Created by TaskIt")
+            putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, startTime ?: System.currentTimeMillis())
+            putExtra(CalendarContract.EXTRA_EVENT_END_TIME, endTime ?: System.currentTimeMillis() + 3600000)
+            addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY) // ✅ Prevents calendar from staying in back stack
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (isPackageInstalled(preferredApp!!)) {
+                setPackage(preferredApp)
+                Log.d(TAG, "Targeting $preferredApp for title: $title")
+            } else {
+                Log.d(TAG, "Preferred app $preferredApp not installed, using generic intent")
+            }
+        }
+
+        try {
+            startActivity(intent)
+            Toast.makeText(this, "Task created", Toast.LENGTH_SHORT).show() // ✅ Native toast
+            Log.d(TAG, "Successfully launched calendar intent for title: $title")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to launch calendar intent: ${e.message}")
+        }
+    }
+
+    private fun isPackageInstalled(packageName: String): Boolean {
+        return try {
+            packageManager.getPackageInfo(packageName, 0)
+            true
+        } catch (e: PackageManager.NameNotFoundException) {
+            false
+        }
     }
 }
