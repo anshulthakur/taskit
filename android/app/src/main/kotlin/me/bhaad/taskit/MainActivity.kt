@@ -8,8 +8,6 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import android.content.pm.PackageManager
 import android.util.Log
-import android.widget.Toast
-
 
 class MainActivity : FlutterActivity() {
     private var sharedText: String? = null
@@ -34,8 +32,7 @@ class MainActivity : FlutterActivity() {
             sharedText = intent.getStringExtra(Intent.EXTRA_PROCESS_TEXT)
             Log.d(TAG, "Received shared text: $sharedText")
             redirectToCalendar(sharedText ?: "")
-            // ✅ Exit TaskIt after launching calendar
-            finish()
+            finish() // ✅ Exit TaskIt after launching calendar
         }
     }
 
@@ -49,7 +46,6 @@ class MainActivity : FlutterActivity() {
                     result.success(sharedText)
                     sharedText = null
                 } else {
-                    Log.d(TAG, "Method not implemented: ${call.method}")
                     result.notImplemented()
                 }
             }
@@ -61,10 +57,8 @@ class MainActivity : FlutterActivity() {
                         val packageName = call.argument<String>("packageName")
                         try {
                             packageManager.getPackageInfo(packageName!!, 0)
-                            Log.d(TAG, "Package $packageName is installed")
                             result.success(true)
                         } catch (e: PackageManager.NameNotFoundException) {
-                            Log.d(TAG, "Package $packageName is not installed: ${e.message}")
                             result.success(false)
                         }
                     }
@@ -76,10 +70,7 @@ class MainActivity : FlutterActivity() {
                         redirectToCalendar(title ?: "", description, startTime, endTime)
                         result.success(true)
                     }
-                    else -> {
-                        Log.d(TAG, "Method not implemented: ${call.method}")
-                        result.notImplemented()
-                    }
+                    else -> result.notImplemented()
                 }
             }
     }
@@ -98,20 +89,15 @@ class MainActivity : FlutterActivity() {
             putExtra(CalendarContract.Events.DESCRIPTION, description ?: "Created by TaskIt")
             putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, startTime ?: System.currentTimeMillis())
             putExtra(CalendarContract.EXTRA_EVENT_END_TIME, endTime ?: System.currentTimeMillis() + 3600000)
-            addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY) // ✅ Prevents calendar from staying in back stack
+            addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             if (isPackageInstalled(preferredApp!!)) {
                 setPackage(preferredApp)
-                Log.d(TAG, "Targeting $preferredApp for title: $title")
-            } else {
-                Log.d(TAG, "Preferred app $preferredApp not installed, using generic intent")
             }
         }
 
         try {
             startActivity(intent)
-            Toast.makeText(this, "Task created", Toast.LENGTH_SHORT).show() // ✅ Native toast
-            Log.d(TAG, "Successfully launched calendar intent for title: $title")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to launch calendar intent: ${e.message}")
         }
