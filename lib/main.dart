@@ -65,22 +65,18 @@ Future<bool> isPackageInstalled(String packageName) async {
   }
 }
 
-// Abstract provider for extensibility
 abstract class IntegrationProvider {
   String get name;
   Future<void> createTask(String title, DateTime? dueDate, String? description, bool isGoogleCalInstalled, BuildContext context);
 }
 
-// Google Calendar Provider with API and intent fallback
 class GoogleCalendarProvider implements IntegrationProvider {
   @override
   String get name => 'Google Calendar';
   static const String _serverClientId = '87427269367-3tr6mlp9khafuc7qedf8gi20tuut2gda.apps.googleusercontent.com';
 
-  // Singleton instance
   final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
 
-  // Required scope for creating events
   static const List<String> _calendarScopes = [
     'https://www.googleapis.com/auth/calendar.events',
   ];
@@ -89,7 +85,6 @@ class GoogleCalendarProvider implements IntegrationProvider {
   bool _isInitialized = false;
 
   GoogleCalendarProvider() {
-    // Initialize synchronously to ensure readiness
     _initializeGoogleSignIn();
   }
 
@@ -138,7 +133,6 @@ class GoogleCalendarProvider implements IntegrationProvider {
 
   Future<calendar.CalendarApi?> _getCalendarApi(BuildContext context) async {
     try {
-      // Ensure initialization is complete
       if (!_isInitialized) {
         if (kDebugMode) {
           print('GoogleSignIn not initialized, retrying...');
@@ -146,20 +140,17 @@ class GoogleCalendarProvider implements IntegrationProvider {
         await _initializeGoogleSignIn();
       }
 
-      // Authenticate if not already signed in
       if (_currentUser == null) {
         if (_googleSignIn.supportsAuthenticate()) {
           if (kDebugMode) {
             print('Attempting GoogleSignIn authentication');
           }
-          // Ensure UI is ready before showing prompt
           await WidgetsBinding.instance.endOfFrame;
           _currentUser = await _googleSignIn.authenticate();
           if (_currentUser == null) {
             if (kDebugMode) {
               print('Authentication failed: No account selected or user cancelled');
             }
-            // Show dialog to prompt user to retry or configure account
             bool retry = false;
             await showDialog(
               context: context,
@@ -172,9 +163,7 @@ class GoogleCalendarProvider implements IntegrationProvider {
                     child: const Text('Cancel'),
                   ),
                   TextButton(
-                    onPressed: () {
-                      Navigator.pop(context, true);
-                    },
+                    onPressed: () => Navigator.pop(context, true),
                     child: const Text('Retry'),
                   ),
                 ],
@@ -207,7 +196,6 @@ class GoogleCalendarProvider implements IntegrationProvider {
         }
       }
 
-      // Check existing authorization or request scopes
       if (kDebugMode) {
         print('Requesting authorization for scopes: $_calendarScopes');
       }
@@ -222,7 +210,6 @@ class GoogleCalendarProvider implements IntegrationProvider {
             .authorizeScopes(_calendarScopes);
       }
 
-      // Get access token from authorization headers
       final headers = await _currentUser!.authorizationClient
           .authorizationHeaders(_calendarScopes);
       if (headers == null || !headers.containsKey('Authorization')) {
@@ -279,11 +266,9 @@ class GoogleCalendarProvider implements IntegrationProvider {
       print('Starting createTask: title=$title, dueDate=$dueDate, isGoogleCalInstalled=$isGoogleCalInstalled');
     }
 
-    // Try Google Calendar API
     final api = await _getCalendarApi(context);
     if (api != null) {
       try {
-        // Request local calendar permission for API usage
         final status = await Permission.calendarWriteOnly.request();
         if (!status.isGranted) {
           if (kDebugMode) {
@@ -293,7 +278,7 @@ class GoogleCalendarProvider implements IntegrationProvider {
         }
 
         final event = calendar.Event(
-          summary: title.isNotEmpty ? title : 'TaskIt Event',
+          summary: title.isNotEmpty ? title : 'TaskIt Task',
           description: description ?? 'Created by TaskIt',
           start: calendar.EventDateTime(
             dateTime: dueDate?.toUtc() ?? DateTime.now().toUtc(),
@@ -306,7 +291,7 @@ class GoogleCalendarProvider implements IntegrationProvider {
 
         await api.events.insert(event, 'primary');
         if (kDebugMode) {
-          print('Event created via Google Calendar API');
+          print('Task created via Google Calendar API');
         }
         return;
       } catch (e) {
@@ -320,12 +305,10 @@ class GoogleCalendarProvider implements IntegrationProvider {
       }
     }
 
-    // Fallback to intent-based approach (no permission needed for intent)
     try {
-      // Try direct Google Calendar intent if installed
       if (isGoogleCalInstalled) {
         final result = await _calendarChannel.invokeMethod('addGoogleCalendarEvent', {
-          'title': title.isNotEmpty ? title : 'TaskIt Event',
+          'title': title.isNotEmpty ? title : 'TaskIt Task',
           'description': description ?? 'Created by TaskIt',
           'startTime': (dueDate?.toUtc() ?? DateTime.now().toUtc()).millisecondsSinceEpoch,
           'endTime': (dueDate?.toUtc() ?? DateTime.now().toUtc())
@@ -334,7 +317,7 @@ class GoogleCalendarProvider implements IntegrationProvider {
         });
         if (result == true) {
           if (kDebugMode) {
-            print('Event added via direct Google Calendar intent');
+            print('Task added via direct Google Calendar intent');
           }
           return;
         } else {
@@ -348,9 +331,8 @@ class GoogleCalendarProvider implements IntegrationProvider {
         }
       }
 
-      // Fallback to Add2Calendar
       final event = Event(
-        title: title.isNotEmpty ? title : 'TaskIt Event',
+        title: title.isNotEmpty ? title : 'TaskIt Task',
         description: description ?? 'Created by TaskIt',
         startDate: dueDate?.toUtc() ?? DateTime.now().toUtc(),
         endDate: (dueDate?.toUtc() ?? DateTime.now().toUtc()).add(const Duration(hours: 1)),
@@ -358,26 +340,28 @@ class GoogleCalendarProvider implements IntegrationProvider {
       final added = await Add2Calendar.addEvent2Cal(event);
       if (added) {
         if (kDebugMode) {
-          print('Event added via Add2Calendar');
+          print('Task added via Add2Calendar');
         }
         return;
       } else {
         if (kDebugMode) {
           print('Add2Calendar failed: No calendar app available');
         }
-        throw Exception('No calendar app available to handle the event. Please ensure a calendar app like Google Calendar is installed and configured.');
+        throw Exception('No calendar app available to handle the task. Please ensure a calendar app like Google Calendar is installed and configured.');
       }
     } catch (e) {
       if (kDebugMode) {
-        print('Failed to add event to calendar: $e');
+        print('Failed to add task to calendar: $e');
       }
-      throw Exception('Failed to add event to calendar: $e');
+      throw Exception('Failed to add task to calendar: $e');
     }
   }
 }
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final List<IntegrationProvider>? providers;
+
+  const HomeScreen({super.key, this.providers});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -386,7 +370,8 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   String _selectedText = '';
   String _title = '';
-  DateTime? _dueDate;
+  DateTime? _selectedDate;
+  TimeOfDay? _selectedTime;
   String? _description;
   IntegrationProvider? _selectedProvider;
   final List<IntegrationProvider> _providers = [];
@@ -400,11 +385,10 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _loadProviders();
     _loadSharedText();
-    // Listen for share intents (e.g., from WhatsApp)
     _intentDataStreamSubscription = ReceiveSharingIntent.instance.getMediaStream().listen((List<SharedMediaFile> value) {
       for (var file in value) {
         if (file.type == SharedMediaType.text) {
-          final sharedText = file.path; // Text content is in 'path' for SharedMediaType.text
+          final sharedText = file.path;
           if (sharedText.isNotEmpty) {
             if (kDebugMode) {
               print('Shared text received: $sharedText');
@@ -424,11 +408,10 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     });
 
-    // Handle share intents when app is closed
     ReceiveSharingIntent.instance.getInitialMedia().then((List<SharedMediaFile> value) {
       for (var file in value) {
         if (file.type == SharedMediaType.text) {
-          final sharedText = file.path; // Text content is in 'path' for SharedMediaType.text
+          final sharedText = file.path;
           if (sharedText.isNotEmpty) {
             if (kDebugMode) {
               print('Initial shared text: $sharedText');
@@ -442,15 +425,17 @@ class _HomeScreenState extends State<HomeScreen> {
           }
         }
       }
-      // Tell the library we are done processing the initial intent
       ReceiveSharingIntent.instance.reset();
     });
   }
 
   Future<void> _loadProviders() async {
-    // Check if Google Calendar app is installed (for default provider logic)
     _isGoogleCalInstalled = await isPackageInstalled('com.google.android.calendar');
-    _providers.add(GoogleCalendarProvider()); // Always add, as API works without app
+    if (widget.providers != null) {
+      _providers.addAll(widget.providers!);
+    } else {
+      _providers.add(GoogleCalendarProvider());
+    }
 
     await _loadSelectedProvider();
     setState(() => _providersLoaded = true);
@@ -459,15 +444,14 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadSelectedProvider() async {
     final prefs = await SharedPreferences.getInstance();
     final savedName = prefs.getString('selected_provider');
-    IntegrationProvider defaultProvider = _providers.first; // Safe default since _providers is non-empty
+    IntegrationProvider defaultProvider = _providers.first;
     if (savedName != null) {
       final provider = _providers.firstWhere(
         (p) => p.name == savedName,
-        orElse: () => defaultProvider, // Use default if no match
+        orElse: () => defaultProvider,
       );
       setState(() => _selectedProvider = provider);
     } else {
-      // Default to Google Calendar
       setState(() => _selectedProvider = defaultProvider);
       await prefs.setString('selected_provider', defaultProvider.name);
     }
@@ -490,29 +474,25 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _selectDate(BuildContext context) async {
+  Future<void> _selectDate() async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: _dueDate ?? DateTime.now(),
+      initialDate: _selectedDate ?? DateTime.now(),
       firstDate: DateTime.now(),
       lastDate: DateTime(2101),
     );
     if (picked != null) {
-      final time = await showTimePicker(
-        context: context,
-        initialTime: TimeOfDay.fromDateTime(_dueDate ?? DateTime.now()),
-      );
-      if (time != null) {
-        setState(() {
-          _dueDate = DateTime(
-            picked.year,
-            picked.month,
-            picked.day,
-            time.hour,
-            time.minute,
-          );
-        });
-      }
+      setState(() => _selectedDate = picked);
+    }
+  }
+
+  Future<void> _selectTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _selectedTime ?? TimeOfDay.now(),
+    );
+    if (picked != null) {
+      setState(() => _selectedTime = picked);
     }
   }
 
@@ -526,13 +506,22 @@ class _HomeScreenState extends State<HomeScreen> {
       );
       return;
     }
+    final dueDate = _selectedDate != null && _selectedTime != null
+        ? DateTime(
+            _selectedDate!.year,
+            _selectedDate!.month,
+            _selectedDate!.day,
+            _selectedTime!.hour,
+            _selectedTime!.minute,
+          )
+        : null;
     try {
-      await _selectedProvider!.createTask(_title, _dueDate, _description, _isGoogleCalInstalled, context);
+      await _selectedProvider!.createTask(_title, dueDate, _description, _isGoogleCalInstalled, context);
       if (kDebugMode) {
         print('Task created successfully: title=$_title');
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Task/Event created successfully')),
+        const SnackBar(content: Text('Task created successfully')),
       );
       if (Navigator.canPop(context)) {
         Navigator.pop(context);
@@ -556,72 +545,140 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('TaskIt')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      appBar: AppBar(
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            if (_selectedText.isNotEmpty)
-              Text(
-                'Selected/Shared Text: $_selectedText',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-            const SizedBox(height: 16),
-            TextField(
-              decoration: const InputDecoration(labelText: 'Title'),
-              onChanged: (value) => _title = value,
-              controller: TextEditingController(text: _title),
+            Image.asset(
+              'assets/icons/app_icon.png',
+              height: 24,
+              width: 24,
             ),
-            const SizedBox(height: 16),
-            TextField(
-              decoration: const InputDecoration(labelText: 'Description (optional)'),
-              onChanged: (value) => _description = value,
-              controller: TextEditingController(text: _description),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                const Text('Due Date: '),
-                Text(
-                  _dueDate != null
-                      ? DateFormat('yyyy-MM-dd HH:mm').format(_dueDate!)
-                      : 'Not set',
-                ),
-                const Spacer(),
-                ElevatedButton(
-                  onPressed: () => _selectDate(context),
-                  child: const Text('Select Date/Time'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            DropdownButton<IntegrationProvider>(
-              hint: const Text('Select Provider'),
-              value: _selectedProvider,
-              onChanged: (provider) async {
-                if (provider != null) {
-                  final prefs = await SharedPreferences.getInstance();
-                  await prefs.setString('selected_provider', provider.name);
-                  if (kDebugMode) {
-                    print('Selected provider: ${provider.name}');
-                  }
-                  setState(() => _selectedProvider = provider);
-                }
-              },
-              items: _providers.map((provider) {
-                return DropdownMenuItem(
-                  value: provider,
-                  child: Text(provider.name),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 32),
-            ElevatedButton(
-              onPressed: _createTask,
-              child: const Text('Create Task/Event'),
+            const SizedBox(width: 8),
+            const Text(
+              'TaskIt',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
           ],
+        ),
+        centerTitle: true,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (_selectedText.isNotEmpty)
+                Text(
+                  'Selected/Shared Text: $_selectedText',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              const SizedBox(height: 16),
+              const Divider(color: Color(0xFFE0E0E0), thickness: 1),
+              TextField(
+                decoration: const InputDecoration(labelText: 'Title'),
+                onChanged: (value) => setState(() => _title = value),
+                controller: TextEditingController(text: _title),
+              ),
+              const SizedBox(height: 16),
+              const Divider(color: Color(0xFFE0E0E0), thickness: 1),
+              Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: _selectDate,
+                      child: InputDecorator(
+                        decoration: const InputDecoration(labelText: 'Date'),
+                        child: Text(
+                          _selectedDate != null
+                              ? DateFormat('yyyy-MM-dd').format(_selectedDate!)
+                              : 'Not set',
+                          style: TextStyle(color: Colors.grey[600]),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: _selectTime,
+                      child: InputDecorator(
+                        decoration: const InputDecoration(labelText: 'Time'),
+                        child: Text(
+                          _selectedTime != null
+                              ? _selectedTime!.format(context)
+                              : 'Not set',
+                          style: TextStyle(color: Colors.grey[600]),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              const Divider(color: Color(0xFFE0E0E0), thickness: 1),
+              Center(
+                child: SizedBox(
+                  width: double.infinity, // Makes it span full width inside parent
+                  child: DropdownButtonFormField<IntegrationProvider>(
+                    decoration: const InputDecoration(
+                      labelText: 'Select Provider',
+                      border: OutlineInputBorder(),
+                    ),
+                    initialValue: _selectedProvider,
+                    onChanged: (provider) async {
+                      if (provider != null) {
+                        final prefs = await SharedPreferences.getInstance();
+                        await prefs.setString('selected_provider', provider.name);
+                        if (kDebugMode) {
+                          print('Selected provider: ${provider.name}');
+                        }
+                        setState(() => _selectedProvider = provider);
+                      }
+                    },
+                    items: _providers.map((provider) {
+                      return DropdownMenuItem(
+                        value: provider,
+                        child: Text(provider.name),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+              const Divider(color: Color(0xFFE0E0E0), thickness: 1),
+              TextField(
+                decoration: const InputDecoration(labelText: 'Task Details (optional)'),
+                onChanged: (value) => setState(() => _description = value),
+                controller: TextEditingController(text: _description),
+                maxLines: 5,
+                keyboardType: TextInputType.multiline,
+              ),
+              const SizedBox(height: 32),
+              Center(
+                child: SizedBox(
+                  width: 240, // Adjust width as needed
+                  child: ElevatedButton(
+                    onPressed: _createTask,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      textStyle: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text('Create Task'),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 24), // Optional bottom spacing
+            ],
+          ),
         ),
       ),
     );

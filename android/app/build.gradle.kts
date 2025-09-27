@@ -29,9 +29,9 @@ android {
     signingConfigs {
         create("release") {
             storeFile = file("taskit-release.keystore")
-            storePassword = "android"
+            storePassword = "@nshul@12"
             keyAlias = "taskit-key-alias"
-            keyPassword = "android"
+            keyPassword = "@nshul@12"
         }
     }
 
